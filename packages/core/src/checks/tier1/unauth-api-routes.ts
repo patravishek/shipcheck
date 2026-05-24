@@ -70,7 +70,7 @@ const PUBLIC_INTENT_PATHS = [
   /\/api\/waitlist/,        // public signup / lead capture
   /\/api\/subscribe/,
   /\/api\/newsletter/,
-  /\/api\/leads?\b/,
+  /\/leads?\b/,              // lead capture anywhere in path (e.g. /api/ielts-diagnostic/lead)
   /\/api\/contact/,
   /\/api\/feedback/,
   /\/api\/health/,          // infrastructure health checks

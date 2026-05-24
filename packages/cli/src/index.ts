@@ -2,13 +2,13 @@
 import { Command } from 'commander';
 import { resolve } from 'node:path';
 import { existsSync, appendFileSync } from 'node:fs';
-import { scan, formatJson } from '@shipsafe/core';
+import { scan, formatJson } from '@shipcheck/core';
 import { printReport } from './output.js';
 
 const program = new Command();
 
 program
-  .name('shipsafe')
+  .name('shipcheck')
   .description('Security scanner for vibe-coded apps — plain English, no jargon')
   .version('0.1.0')
   .argument('[path]', 'Project directory to scan', '.')
@@ -60,7 +60,7 @@ program
         if (gitignoreIssues.length > 0) {
           const gitignorePath = resolve(projectPath, '.gitignore');
           const toAdd = ['.env', '.env.local', '.env.*.local', '.env.production'].join('\n');
-          appendFileSync(gitignorePath, `\n# Added by shipsafe\n${toAdd}\n`);
+          appendFileSync(gitignorePath, `\n# Added by shipcheck\n${toAdd}\n`);
           console.log('✅ --fix applied: added .env entries to .gitignore\n');
         } else {
           console.log('ℹ️  No auto-fixes available for the detected issues.\n');

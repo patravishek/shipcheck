@@ -32,17 +32,21 @@ node packages/mcp-server/dist/index.js
 ```
 
 ## Use ShipSafe as MCP Server (in this Claude Code instance)
-Add to `.claude/settings.json`:
-```json
-{
-  "mcpServers": {
-    "shipsafe": {
-      "command": "node",
-      "args": ["/Users/avishekpatra/Projects/shipsafe/packages/mcp-server/dist/index.js"]
-    }
-  }
-}
+
+**The only reliable method — use the CLI command (run this in terminal, outside of a `claude` session):**
+
+```bash
+# If installed from npm (after publish):
+claude mcp add shipsafe npx @shipsafe/mcp-server
+
+# If running from local source (dev only):
+claude mcp add shipsafe node /Users/avishekpatra/Projects/shipsafe/packages/mcp-server/dist/index.js
 ```
+Then start a fresh `claude` session. Run `/mcp` to confirm `shipsafe · ✔ connected` appears.
+
+> **Why not edit settings.json or .mcp.json directly?**
+> Claude Code CLI stores MCP servers in `~/.claude.json` scoped to a project path.
+> Manually editing other config files is unreliable — use `claude mcp add` instead.
 
 ## Tech Stack
 - **Language:** TypeScript 6, ESM throughout (`"type": "module"`)

@@ -1,4 +1,4 @@
-# ShipSafe
+# ShipCheck
 
 > Security scanner for vibe-coded apps — plain English, no jargon.
 
@@ -12,10 +12,10 @@ Scans your project for the security issues that kill AI-generated apps in produc
 
 ```bash
 # Scan the current directory
-npx @shipsafe/cli .
+npx @shipcheck/cli .
 
 # Scan a specific project
-npx @shipsafe/cli /path/to/my-app
+npx @shipcheck/cli /path/to/my-app
 ```
 
 ## What It Catches
@@ -39,12 +39,12 @@ npx @shipsafe/cli /path/to/my-app
 ## CLI Usage
 
 ```bash
-npx @shipsafe/cli .                    # Scan current directory
-npx @shipsafe/cli ./my-app             # Scan specific path
-npx @shipsafe/cli . --json             # Output JSON (useful for CI)
-npx @shipsafe/cli . --fix              # Auto-fix: adds .gitignore entries
-npx @shipsafe/cli . --verbose          # Show extra detail on errors
-npx @shipsafe/cli . --checks missing-gitignore,exposed-secrets  # Run specific checks
+npx @shipcheck/cli .                    # Scan current directory
+npx @shipcheck/cli ./my-app             # Scan specific path
+npx @shipcheck/cli . --json             # Output JSON (useful for CI)
+npx @shipcheck/cli . --fix              # Auto-fix: adds .gitignore entries
+npx @shipcheck/cli . --verbose          # Show extra detail on errors
+npx @shipcheck/cli . --checks missing-gitignore,exposed-secrets  # Run specific checks
 ```
 
 Exit code `1` when critical issues are found (useful for CI pipelines).
@@ -53,24 +53,17 @@ Exit code `1` when critical issues are found (useful for CI pipelines).
 
 ## MCP Server (Claude Code / Cursor)
 
-Add ShipSafe as an MCP server so your AI coding agent can scan your project on demand.
+Add ShipCheck as an MCP server so your AI coding agent can scan your project on demand.
 
-### Claude Code
+### Claude Code (recommended)
 
-Add to your Claude Code settings (`~/.claude/settings.json` or project `.claude/settings.json`):
+Run this once in your terminal:
 
-```json
-{
-  "mcpServers": {
-    "shipsafe": {
-      "command": "npx",
-      "args": ["-y", "@shipsafe/mcp-server"]
-    }
-  }
-}
+```bash
+claude mcp add shipcheck npx @shipcheck/mcp-server
 ```
 
-Then in Claude Code:
+Then ask Claude:
 ```
 > "Scan my project for security issues"
 > "Check if my environment variables are safe"
@@ -84,9 +77,9 @@ Add to `~/.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
-    "shipsafe": {
+    "shipcheck": {
       "command": "npx",
-      "args": ["-y", "@shipsafe/mcp-server"]
+      "args": ["-y", "@shipcheck/mcp-server"]
     }
   }
 }
@@ -106,9 +99,9 @@ Add to `~/.cursor/mcp.json`:
 
 ```
 packages/
-  core/         @shipsafe/core        — Scanner engine (shared logic, 10 checks)
-  mcp-server/   @shipsafe/mcp-server  — MCP server entry point
-  cli/          @shipsafe/cli         — CLI with colored output (bin: shipsafe)
+  core/         @shipcheck/core        — Scanner engine (shared logic, 10 checks)
+  mcp-server/   @shipcheck/mcp-server  — MCP server entry point
+  cli/          @shipcheck/cli         — CLI (bin: shipcheck)
 ```
 
 ## Development
@@ -145,15 +138,15 @@ node packages/mcp-server/dist/index.js
 
 ## Roadmap
 
-- **Phase 2** (coming): 20 checks, web report sharing, `--share` flag, expanded MCP tools (`explain_issue`, `suggest_fix`, `pre_deploy_check`)
+- **Phase 2** (coming): 20 checks, web report sharing, `--share` flag, expanded MCP tools
 - **Phase 3** (coming): GitHub Action, paid tier, scan history dashboard
 - **Phase 4** (coming): Lovable/Bolt/v0-specific check packs, partner integrations
 
 ---
 
-## Why ShipSafe?
+## Why ShipCheck?
 
-Every security tool outputs CWE IDs, CVSS scores, and stack traces. Vibe coders don't speak that language. ShipSafe tells you:
+Every security tool outputs CWE IDs, CVSS scores, and stack traces. Vibe coders don't speak that language. ShipCheck tells you:
 
 > "Your database password is public" — not "CWE-200: Information Exposure Through an Error Message (CVSS 7.5)"
 

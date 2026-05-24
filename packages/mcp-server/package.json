@@ -1,7 +1,7 @@
 {
-  "name": "@shipsafe/mcp-server",
+  "name": "@shipcheck/mcp-server",
   "version": "0.1.0",
-  "description": "ShipSafe MCP server — security scanner for vibe-coded apps",
+  "description": "ShipCheck MCP server — security scanner for vibe-coded apps",
   "type": "module",
   "bin": {
     "shipsafe-mcp": "./dist/index.js"
@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@shipsafe/core": "workspace:*"
+    "@shipcheck/core": "workspace:*"
   },
   "keywords": [
     "mcp",
@@ -27,6 +27,10 @@
     "shipsafe"
   ],
   "license": "MIT",
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@types/node": "^25.9.1"
   }

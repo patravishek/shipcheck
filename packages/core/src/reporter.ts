@@ -42,7 +42,7 @@ export function formatReport(result: ScanResult): string {
   const lines: string[] = [];
 
   lines.push('');
-  lines.push('🔍 ShipSafe Security Scan');
+  lines.push('🔍 ShipCheck Security Scan');
   lines.push(DIVIDER);
   lines.push('');
 

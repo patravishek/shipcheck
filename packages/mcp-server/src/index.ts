@@ -9,32 +9,79 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { scan, formatReport, formatJson } from '@shipsafe/core';
+import { scan, formatReport } from '@shipcheck/core';
+import type { Issue, ScanResult } from '@shipcheck/core';
 
 const server = new Server(
-  { name: 'shipsafe', version: '0.1.0' },
+  { name: 'shipcheck', version: '0.1.0' },
   { capabilities: { tools: {} } },
 );
+
+// Compact issue shape — title + file + severity only, no description/fix text
+function slim(issue: Issue) {
+  return {
+    severity: issue.severity,
+    title: issue.title,
+    file: issue.file ?? null,
+    line: issue.line ?? null,
+  };
+}
+
+// Full issue shape — includes description and fix for actionable output
+function full(issue: Issue) {
+  return {
+    severity: issue.severity,
+    title: issue.title,
+    file: issue.file ?? null,
+    line: issue.line ?? null,
+    description: issue.description,
+    fix: issue.fix,
+  };
+}
+
+function summarise(result: ScanResult, detail: 'summary' | 'full') {
+  // Critical issues always get full detail — they need to be acted on immediately
+  // Warnings are slim by default to keep token count low
+  return {
+    score: result.score,
+    scannedFiles: result.scannedFiles,
+    scanDurationMs: result.scanDurationMs,
+    frameworks: result.frameworks,
+    counts: {
+      critical: result.critical.length,
+      warnings: result.warnings.length,
+      info: result.info.length,
+    },
+    critical: result.critical.map(full),
+    warnings: detail === 'full' ? result.warnings.map(full) : result.warnings.map(slim),
+    positives: result.positives,
+  };
+}
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: 'scan_project',
       description:
-        'Scan a project directory for security vulnerabilities. Explains every issue in plain English — no security jargon. Returns a structured report with critical issues, warnings, and a safety score.',
+        'Scan a project directory for security vulnerabilities. Returns critical issues with full details and a summary of warnings. Use detail="full" to get fix instructions for warnings too.',
       inputSchema: {
         type: 'object',
         properties: {
           path: {
             type: 'string',
-            description:
-              'Absolute path to the project directory to scan. Defaults to the current working directory.',
+            description: 'Absolute path to the project directory to scan. Defaults to current working directory.',
+          },
+          detail: {
+            type: 'string',
+            enum: ['summary', 'full'],
+            description: '"summary" (default) — critical issues in full, warnings as title+file only. "full" — everything including fix instructions for all warnings.',
+            default: 'summary',
           },
           format: {
             type: 'string',
-            enum: ['text', 'json'],
-            description: 'Output format. "text" for human-readable, "json" for structured data.',
-            default: 'text',
+            enum: ['json', 'text'],
+            description: '"json" (default) for structured data, "text" for human-readable terminal output.',
+            default: 'json',
           },
         },
         required: [],
@@ -78,7 +125,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (name === 'scan_project') {
     const rawPath = (args?.path as string) || process.cwd();
     const projectPath = resolve(rawPath);
-    const format = (args?.format as string) || 'text';
+    const format = (args?.format as string) || 'json';
+    const detail = ((args?.detail as string) || 'summary') as 'summary' | 'full';
 
     if (!existsSync(projectPath)) {
       throw new McpError(ErrorCode.InvalidParams, `Path does not exist: ${projectPath}`);
@@ -86,11 +134,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     try {
       const result = await scan({ projectPath });
-      const output = format === 'json' ? formatJson(result) : formatReport(result);
+      const output = format === 'text'
+        ? formatReport(result)
+        : JSON.stringify(summarise(result, detail), null, 2);
 
-      return {
-        content: [{ type: 'text', text: output }],
-      };
+      return { content: [{ type: 'text', text: output }] };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new McpError(ErrorCode.InternalError, `Scan failed: ${message}`);
@@ -109,12 +157,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const projectPath = absolutePath.split('/').slice(0, -1).join('/');
 
     try {
-      const result = await scan({
-        projectPath,
-        // Only scan the specific file by running all checks against a single-file context
-      });
+      const result = await scan({ projectPath });
 
-      // Filter issues to only those referencing this file
       const relPath = absolutePath.replace(projectPath + '/', '');
       const fileIssues = [
         ...result.critical,
@@ -122,25 +166,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ...result.info,
       ].filter((i) => !i.file || i.file === relPath || i.file.endsWith(relPath));
 
-      if (fileIssues.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `✅ No security issues found in ${relPath}`,
-            },
-          ],
-        };
-      }
-
-      const lines = [`🔍 Security issues in \`${relPath}\`:\n`];
-      fileIssues.forEach((issue, i) => {
-        lines.push(`${i + 1}. [${issue.severity.toUpperCase()}] ${issue.title}`);
-        lines.push(`   ${issue.description}`);
-        lines.push(`   Fix: ${issue.fix}\n`);
-      });
-
-      return { content: [{ type: 'text', text: lines.join('\n') }] };
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            file: relPath,
+            issueCount: fileIssues.length,
+            issues: fileIssues.map(full),
+          }, null, 2),
+        }],
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new McpError(ErrorCode.InternalError, `File scan failed: ${message}`);
@@ -163,29 +198,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const envIssues = [...result.critical, ...result.warnings, ...result.info];
 
-      if (envIssues.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: '✅ Environment variables look safe!\n\n✓ .env files are in .gitignore\n✓ No secrets found in client-side code\n✓ No NEXT_PUBLIC_ leaks detected',
-            },
-          ],
-        };
-      }
-
-      const lines = [
-        `🔍 Environment Variable Security Check\n${'━'.repeat(40)}\n`,
-        `Found ${envIssues.length} issue${envIssues.length > 1 ? 's' : ''}:\n`,
-      ];
-      envIssues.forEach((issue, i) => {
-        lines.push(`${i + 1}. [${issue.severity.toUpperCase()}] ${issue.title}`);
-        if (issue.file) lines.push(`   📁 ${issue.file}${issue.line ? `:${issue.line}` : ''}`);
-        lines.push(`   ${issue.description}`);
-        lines.push(`   🔧 ${issue.fix}\n`);
-      });
-
-      return { content: [{ type: 'text', text: lines.join('\n') }] };
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            issueCount: envIssues.length,
+            issues: envIssues.map(full),
+          }, null, 2),
+        }],
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new McpError(ErrorCode.InternalError, `Env check failed: ${message}`);
@@ -201,6 +222,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('ShipSafe MCP server error:', err);
+  console.error('ShipCheck MCP server error:', err);
   process.exit(1);
 });
