@@ -41,9 +41,9 @@ const PATTERNS: DangerousPattern[] = [
   },
   {
     id: 'sql-injection',
-    // Template literals with SQL keywords — classic SQL injection vector
+    // Require full SQL phrases (not just the keyword) to avoid matching prose like "Create a plan"
     pattern:
-      /`\s*(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE)\s[^`]*\$\{/i,
+      /`\s*(SELECT\s+[\w"'*]|INSERT\s+INTO\s|UPDATE\s+\w|DELETE\s+FROM\s|DROP\s+TABLE\s|ALTER\s+TABLE\s|CREATE\s+TABLE\s|TRUNCATE\s+TABLE\s)[^`]*\$\{/i,
     title: 'SQL QUERY BUILT WITH STRING INTERPOLATION — SQL INJECTION RISK',
     description: (file) =>
       `\`${file}\` builds SQL queries using template literals with \`\${...}\` interpolation. If any of those interpolated values come from user input, attackers can manipulate your query to read, modify, or delete your entire database.`,
@@ -61,10 +61,12 @@ const PATTERNS: DangerousPattern[] = [
   },
 ];
 
-function isTestFile(relativePath: string): boolean {
+function isNonProductionFile(relativePath: string): boolean {
   return (
     /\.(test|spec)\.(ts|tsx|js|jsx)$/.test(relativePath) ||
-    /\/__tests__\//.test(relativePath)
+    /\/__tests__\//.test(relativePath) ||
+    /^scripts\//.test(relativePath) ||
+    /^migrations\//.test(relativePath)
   );
 }
 
@@ -77,12 +79,14 @@ export const dangerousPatterns: Check = {
 
     for (const file of ctx.files) {
       if (!/\.(ts|tsx|js|jsx|mjs)$/.test(file.relativePath)) continue;
-      if (isTestFile(file.relativePath)) continue;
+      if (isNonProductionFile(file.relativePath)) continue;
 
       for (const dp of PATTERNS) {
         const match = dp.pattern.exec(file.content);
         if (!match) continue;
         if (!isInCodeContext(file.content, match.index)) continue;
+        // JSON.stringify is safe serialization — common pattern for JSON-LD structured data
+        if (dp.id === 'dangerous-inner-html' && match[0].includes('JSON.stringify')) continue;
 
         issues.push({
           id: `dangerous-patterns:${file.relativePath}:${dp.id}`,

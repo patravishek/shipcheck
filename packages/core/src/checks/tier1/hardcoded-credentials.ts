@@ -57,8 +57,17 @@ const SECRET_PATTERNS: SecretPattern[] = [
   },
 ];
 
-function isTestOrExampleFile(relativePath: string): boolean {
+function shouldSkipFile(relativePath: string): boolean {
+  const name = relativePath.split('/').pop() ?? '';
   return (
+    // .env files are MEANT to store credentials — missing-gitignore check handles exposure
+    /^\.env/.test(name) ||
+    // IDE / tool config files are local-only by convention
+    /^\.claude\//.test(relativePath) ||
+    /^\.cursor\//.test(relativePath) ||
+    /^\.vscode\//.test(relativePath) ||
+    /settings\.local\.json$/.test(relativePath) ||
+    // Test / example files
     /\.(test|spec)\.(ts|tsx|js|jsx)$/.test(relativePath) ||
     /\/__tests__\//.test(relativePath) ||
     /\/fixtures\//.test(relativePath) ||
@@ -76,7 +85,7 @@ export const hardcodedCredentials: Check = {
     const seen = new Set<string>();
 
     for (const file of ctx.files) {
-      if (isTestOrExampleFile(file.relativePath)) continue;
+      if (shouldSkipFile(file.relativePath)) continue;
       // Skip lockfiles and binary-ish files
       if (/\.(lock|map)$/.test(file.relativePath)) continue;
 
