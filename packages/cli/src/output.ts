@@ -101,4 +101,28 @@ export function printReport(result: ScanResult): void {
     console.log(`   Detected: ${result.frameworks.join(', ')}`);
   }
   console.log('');
+
+  if (result.critical.length > 0) {
+    printFixPrompt(result.critical);
+  }
+}
+
+function printFixPrompt(issues: Issue[]): void {
+  const lines = issues.map((issue, i) => {
+    const loc = issue.file
+      ? `${issue.file}${issue.line ? `:${issue.line}` : ''}`
+      : 'project-wide';
+    return `${i + 1}. [${loc}] ${issue.title}\n   ${issue.fix}`;
+  });
+
+  console.log(DIVIDER);
+  console.log('📋 Fix prompt — paste into Claude Code or Cursor:');
+  console.log(DIVIDER);
+  console.log('');
+  console.log('Fix these security issues in my project:');
+  console.log('');
+  console.log(lines.join('\n\n'));
+  console.log('');
+  console.log(DIVIDER);
+  console.log('');
 }

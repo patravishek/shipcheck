@@ -1,6 +1,6 @@
 {
   "name": "@shipcheck/cli",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "ShipCheck CLI — security scanner for vibe-coded apps. Plain English. No jargon.",
   "type": "module",
   "bin": {
@@ -30,7 +30,9 @@
     "supabase"
   ],
   "license": "MIT",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
