@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { existsSync, appendFileSync } from 'node:fs';
 import { scan, formatJson } from '@shipcheck/core';
 import { printReport } from './output.js';
+import { installHook, uninstallHook, runHook } from './hook.js';
 
 const program = new Command();
 
@@ -78,5 +79,20 @@ program
       process.exit(2);
     }
   });
+
+program
+  .command('install-hook')
+  .description('Install ShipCheck as a global git pre-commit hook (runs on every commit, across all repos)')
+  .action(() => installHook());
+
+program
+  .command('uninstall-hook')
+  .description('Remove the ShipCheck pre-commit hook')
+  .action(() => uninstallHook());
+
+program
+  .command('hook')
+  .description('Run pre-commit check on staged files (called automatically by git)')
+  .action(async () => runHook());
 
 program.parse();
