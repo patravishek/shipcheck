@@ -21,7 +21,14 @@ That's it. Every `git commit` on every project on your machine now scans staged 
 
 ## Pre-Commit Hook Behaviour
 
-**No issues → silent, commit proceeds**
+**No issues → commit proceeds, attestation appended to commit message:**
+
+```
+[main abc1234] add payment route
+ShipCheck: score:9.5/10 | criticals:0 | warnings:0
+```
+
+Every clean commit gets a `ShipCheck:` line appended automatically. Your git log becomes a security audit trail.
 
 **Warnings → commit proceeds with a notice:**
 ```
@@ -46,6 +53,25 @@ That's it. Every `git commit` on every project on your machine now scans staged 
 
 ---
 
+## Fix Prompt
+
+When a full scan finds critical issues, ShipCheck prints a paste-ready prompt at the end of the report:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 Fix prompt — paste into Claude Code or Cursor:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Fix these security issues in my project:
+
+1. [src/app/api/payments/route.ts:12] No auth check on API route
+   Add a session check at the top of the handler...
+```
+
+Copy it, paste it into your AI editor, done.
+
+---
+
 ## Manual Scanning
 
 ```bash
@@ -67,6 +93,8 @@ shipcheck install-hook     # install globally (all repos, one setup)
 shipcheck uninstall-hook   # remove hook and restore git config
 ```
 
+Uses `git config --global core.hooksPath` — works across all your repositories with no per-project setup.
+
 ---
 
 ## What It Catches
@@ -79,11 +107,14 @@ shipcheck uninstall-hook   # remove hook and restore git config
 - `eval()`, SQL injection, `dangerouslySetInnerHTML`
 - `NEXT_PUBLIC_` variables leaking secrets
 - Supabase tables without Row Level Security
+- `getSession()` in server-side code (trusts forgeable cookies — use `getUser()`)
+- Hidden Unicode characters in AI rules files (supply chain backdoor attack)
 
 **Warnings (commit allowed, shown as notice)**
 - No Zod/Yup/Joi validation on API routes
 - Auth routes without rate limiting
 - Wildcard CORS configuration
+- Next.js server actions with no authentication check
 
 ---
 

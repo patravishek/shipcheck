@@ -25,6 +25,7 @@ Restart Claude. Then just ask:
 > "Scan my project for security issues before I deploy"
 > "Is this API route safe?"
 > "Check if my environment variables are configured correctly"
+> "Does this server action have an auth check?"
 
 ### Cursor
 
@@ -55,7 +56,7 @@ format  — "json" (default) or "text"
 ```
 
 ### `scan_file`
-Security audit of a single file — useful when you've just written a new API route or component.
+Security audit of a single file — useful when you've just written a new API route, server action, or component.
 
 ```
 path    — absolute path to the file (required)
@@ -67,6 +68,27 @@ Focused audit of environment variable safety. Checks for exposed secrets, missin
 ```
 path    — absolute path to project directory (defaults to cwd)
 ```
+
+---
+
+## What It Catches (13 checks)
+
+**Critical**
+- Server secrets in `'use client'` files
+- `.env` not in `.gitignore`
+- API routes with no auth check
+- Hardcoded API keys in source
+- `eval()`, SQL injection, `dangerouslySetInnerHTML`
+- `NEXT_PUBLIC_` variables leaking secrets
+- Supabase tables without Row Level Security
+- `getSession()` in server-side code — trusts forgeable cookies, use `getUser()` instead
+- Hidden Unicode characters in AI rules files (`.cursor/rules`, `CLAUDE.md`) — supply chain backdoor
+
+**Warnings**
+- No Zod/Yup/Joi validation on API routes
+- Auth routes without rate limiting
+- Wildcard CORS configuration
+- Next.js server actions with no authentication check
 
 ---
 
@@ -84,7 +106,7 @@ path    — absolute path to project directory (defaults to cwd)
 
 ## Also Available As
 
-**CLI with pre-commit hook** — scans automatically on every `git commit`:
+**CLI with pre-commit hook** — scans automatically on every `git commit` and appends a score line to your commit message:
 ```bash
 npm install -g @shipcheck/cli
 shipcheck install-hook

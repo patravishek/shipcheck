@@ -19,6 +19,8 @@ You built your app with Claude Code, Cursor, Lovable, or Bolt. You shipped fast.
 - Your Supabase service key is in a `'use client'` file — visible in the browser
 - Four tables have no Row Level Security — any user can read every row
 - A `.env` file is not in `.gitignore` — one push away from being public
+- A server action has no auth check — any unauthenticated client can invoke it directly
+- Your AI rules file contains hidden Unicode characters — a supply chain attack waiting to happen
 
 You won't know until someone exploits it. ShipCheck finds it first.
 
@@ -46,11 +48,12 @@ That's it. Every `git commit` across every project on your machine now runs a se
 
 ### Automatic — pre-commit hook
 
-After `shipcheck install-hook`, every commit is scanned before it lands in your history:
+After `shipcheck install-hook`, every commit is scanned before it lands in your history.
 
-**Clean commit — silent pass:**
+**Clean commit — silent pass, attestation appended:**
 ```
 [main abc1234] add payment route
+ShipCheck: score:9.0/10 | criticals:0 | warnings:0
 ```
 
 **Warnings found — commit proceeds with a notice:**
@@ -76,6 +79,33 @@ After `shipcheck install-hook`, every commit is scanned before it lands in your 
 ```
 
 The hook only scans files you're actually committing — not your entire project. Fast, relevant, zero noise.
+
+### Git log attestation
+
+Every passing commit gets a ShipCheck line appended to the commit message automatically:
+
+```
+ShipCheck: score:8.5/10 | criticals:0 | warnings:2
+```
+
+Your git log becomes a security audit trail. No extra commands, no separate dashboards.
+
+### Fix prompt — paste into Claude Code or Cursor
+
+When critical issues are found during a full scan, ShipCheck generates a ready-to-paste prompt:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 Fix prompt — paste into Claude Code or Cursor:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Fix these security issues in my project:
+
+1. [src/app/api/payments/route.ts:12] No auth check on API route
+   Add a session check at the top of the handler...
+```
+
+Copy it, paste it into your AI editor, and let it fix the issues for you.
 
 ### On-demand — CLI
 
@@ -116,6 +146,8 @@ Then ask Claude:
 | `dangerous-patterns` | `eval()`, `dangerouslySetInnerHTML`, SQL string interpolation |
 | `next-public-secrets` | Secrets leaked via `NEXT_PUBLIC_` environment variables |
 | `supabase-rls` | Supabase tables created without Row Level Security |
+| `supabase-deprecated-session` | `getSession()` in server-side code — trusts forgeable cookies |
+| `cursor-rules-backdoor` | Hidden Unicode characters in AI rules files — supply chain attack |
 
 ### Warnings — commit proceeds, fix soon
 
@@ -124,6 +156,7 @@ Then ask Claude:
 | `missing-input-validation` | API routes reading request body without Zod/Yup/Joi |
 | `no-rate-limiting` | Login, OTP, payment routes without rate limiting |
 | `insecure-cors` | Wildcard `*` CORS that allows any origin |
+| `server-action-auth` | Next.js server actions callable by any unauthenticated client |
 
 ---
 
@@ -167,7 +200,7 @@ You can audit every check in the open-source repository: [github.com/patravishek
 ## Roadmap
 
 - **v0.2** — `--share` flag: generate a shareable link to your scan report
-- **v0.3** — Score history: track your security score over time
+- **v0.3** — Score history: track your security score over time across commits
 - **v0.4** — GitHub Action: block PRs with new critical issues
 - **v0.5** — 20 checks: Prisma injection, missing CSP headers, JWT in localStorage, and more
 

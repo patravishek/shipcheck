@@ -1,6 +1,6 @@
 # @shipcheck/core
 
-**The scanner engine powering ShipCheck — 10 deterministic security checks for vibe-coded apps.**
+**The scanner engine powering ShipCheck — 13 deterministic security checks for vibe-coded apps.**
 
 [![npm](https://img.shields.io/npm/v/@shipcheck/core)](https://www.npmjs.com/package/@shipcheck/core)
 
@@ -80,6 +80,9 @@ console.log(formatReport(result));
 | `dangerous-patterns` | critical | `eval()`, SQL injection, `dangerouslySetInnerHTML` |
 | `next-public-secrets` | critical | Secrets in `NEXT_PUBLIC_` variables |
 | `supabase-rls` | critical | Tables without Row Level Security |
+| `supabase-deprecated-session` | critical | `getSession()` in server-side code (forgeable cookie) |
+| `cursor-rules-backdoor` | critical | Hidden Unicode in AI rules files (supply chain attack) |
 | `missing-input-validation` | warning | No Zod/Yup on API routes |
 | `no-rate-limiting` | warning | Auth routes without rate limiting |
 | `insecure-cors` | warning | Wildcard CORS configuration |
+| `server-action-auth` | warning | Next.js server actions without auth check |
