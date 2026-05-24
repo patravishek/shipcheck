@@ -1,0 +1,36 @@
+{
+  "name": "@shipsafe/cli",
+  "version": "0.1.0",
+  "description": "ShipSafe CLI — security scanner for vibe-coded apps. Plain English. No jargon.",
+  "type": "module",
+  "bin": {
+    "shipsafe": "./dist/index.js"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@shipsafe/core": "workspace:*",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3"
+  },
+  "keywords": [
+    "security",
+    "scanner",
+    "cli",
+    "vibe-coding",
+    "shipsafe",
+    "nextjs",
+    "supabase"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.9.1"
+  }
+}
