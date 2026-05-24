@@ -1,16 +1,18 @@
 # @shipcheck/core
 
-> Scanner engine powering ShipCheck — 10 security checks for vibe-coded apps.
+**The scanner engine powering ShipCheck — 10 deterministic security checks for vibe-coded apps.**
+
+[![npm](https://img.shields.io/npm/v/@shipcheck/core)](https://www.npmjs.com/package/@shipcheck/core)
 
 This is the shared library used by `@shipcheck/cli` and `@shipcheck/mcp-server`.
 
 **Most users should install one of those instead:**
-- `npx @shipcheck/cli .` — run from the terminal
-- `@shipcheck/mcp-server` — use inside Claude Code or Cursor
+- `npm install -g @shipcheck/cli` → terminal + pre-commit hook
+- `@shipcheck/mcp-server` → Claude Code / Cursor integration
 
-## Use This Package If
+Use this package if you're building a tool, editor plugin, or integration on top of ShipCheck's scanner.
 
-You're building a tool, plugin, or integration on top of ShipCheck's scanner engine.
+---
 
 ## API
 
@@ -43,7 +45,7 @@ console.log(formatReport(result));
   score: number;          // 0–10
   scannedFiles: number;
   scanDurationMs: number;
-  frameworks: string[];   // detected: 'nextjs', 'supabase', etc.
+  frameworks: string[];   // e.g. ['nextjs', 'supabase']
   critical: Issue[];
   warnings: Issue[];
   info: Issue[];
@@ -58,24 +60,26 @@ console.log(formatReport(result));
   checkId: string;
   severity: 'critical' | 'warning' | 'info';
   title: string;
-  description: string;
-  fix: string;
+  description: string;    // plain English explanation
+  fix: string;            // plain English fix instruction
   file?: string;
   line?: number;
 }
 ```
 
+---
+
 ## Check IDs
 
-| ID | Severity |
-|---|---|
-| `exposed-secrets` | critical |
-| `missing-gitignore` | critical |
-| `unauth-api-routes` | critical |
-| `hardcoded-credentials` | critical |
-| `dangerous-patterns` | critical |
-| `next-public-secrets` | critical |
-| `missing-input-validation` | warning |
-| `no-rate-limiting` | warning |
-| `supabase-rls` | critical |
-| `insecure-cors` | warning |
+| ID | Severity | What it finds |
+|---|---|---|
+| `exposed-secrets` | critical | Server secrets in `'use client'` files |
+| `missing-gitignore` | critical | `.env` not in `.gitignore` |
+| `unauth-api-routes` | critical | API routes with no auth |
+| `hardcoded-credentials` | critical | API keys in source code |
+| `dangerous-patterns` | critical | `eval()`, SQL injection, `dangerouslySetInnerHTML` |
+| `next-public-secrets` | critical | Secrets in `NEXT_PUBLIC_` variables |
+| `supabase-rls` | critical | Tables without Row Level Security |
+| `missing-input-validation` | warning | No Zod/Yup on API routes |
+| `no-rate-limiting` | warning | Auth routes without rate limiting |
+| `insecure-cors` | warning | Wildcard CORS configuration |

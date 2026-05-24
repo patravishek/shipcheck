@@ -1,6 +1,6 @@
 {
   "name": "@shipcheck/cli",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "ShipCheck CLI — security scanner for vibe-coded apps. Plain English. No jargon.",
   "type": "module",
   "bin": {

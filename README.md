@@ -1,156 +1,181 @@
 # ShipCheck
 
-> Security scanner for vibe-coded apps — plain English, no jargon.
+**Security scanner for vibe-coded apps — plain English, no jargon.**
 
-Scans your project for the security issues that kill AI-generated apps in production. Explains every issue in plain English. Works as a CLI or as an MCP server inside Claude Code, Cursor, and any MCP-compatible agent.
+[![npm](https://img.shields.io/npm/v/@shipcheck/cli)](https://www.npmjs.com/package/@shipcheck/cli)
+[![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-**No code leaves your machine.** The scanner runs entirely locally.
+AI coding tools write code fast. They also silently skip auth checks, leave API keys in client code, and create database tables without Row Level Security.
+
+ShipCheck catches these before they reach production — automatically, on every `git commit`, in plain English.
 
 ---
 
-## Quick Start
+## The Problem
+
+You built your app with Claude Code, Cursor, Lovable, or Bolt. You shipped fast. But somewhere in those 200 AI-generated files:
+
+- An API route has no authentication check — anyone can call it
+- Your Supabase service key is in a `'use client'` file — visible in the browser
+- Four tables have no Row Level Security — any user can read every row
+- A `.env` file is not in `.gitignore` — one push away from being public
+
+You won't know until someone exploits it. ShipCheck finds it first.
+
+---
+
+## Get Started
+
+**Step 1 — Install the CLI:**
 
 ```bash
-# Scan the current directory
-npx @shipcheck/cli .
-
-# Scan a specific project
-npx @shipcheck/cli /path/to/my-app
+npm install -g @shipcheck/cli
 ```
 
-## What It Catches
-
-### Critical (fix before shipping)
-1. **Exposed secrets in client code** — Supabase service keys, Stripe secrets, DB URLs accessed in `'use client'` files or components
-2. **Missing .gitignore** — `.env` files that will be pushed to GitHub
-3. **Unauthenticated API routes** — Endpoints that return data without checking who's asking
-4. **Hardcoded credentials** — Stripe keys, OpenAI keys, AWS tokens directly in source code
-5. **Dangerous patterns** — `eval()`, `new Function()`, `dangerouslySetInnerHTML` with dynamic content, SQL string interpolation
-6. **NEXT_PUBLIC_ secret leaks** — Service role keys, webhook secrets prefixed with `NEXT_PUBLIC_`
-
-### Warnings (fix soon)
-7. **Missing input validation** — API routes that read request body/params without Zod/Yup/Joi validation
-8. **No rate limiting on auth routes** — Login, register, reset-password without request rate limiting
-9. **Supabase RLS not enabled** — Tables created without Row Level Security
-10. **Insecure CORS** — Wildcard `*` or unconfigured `cors()` that allows any website to call your API
-
----
-
-## CLI Usage
+**Step 2 — Install the pre-commit hook once:**
 
 ```bash
-npx @shipcheck/cli .                    # Scan current directory
-npx @shipcheck/cli ./my-app             # Scan specific path
-npx @shipcheck/cli . --json             # Output JSON (useful for CI)
-npx @shipcheck/cli . --fix              # Auto-fix: adds .gitignore entries
-npx @shipcheck/cli . --verbose          # Show extra detail on errors
-npx @shipcheck/cli . --checks missing-gitignore,exposed-secrets  # Run specific checks
+shipcheck install-hook
 ```
 
-Exit code `1` when critical issues are found (useful for CI pipelines).
+That's it. Every `git commit` across every project on your machine now runs a security scan automatically. You never have to think about it again.
 
 ---
 
-## MCP Server (Claude Code / Cursor)
+## How It Works
 
-Add ShipCheck as an MCP server so your AI coding agent can scan your project on demand.
+### Automatic — pre-commit hook
 
-### Claude Code (recommended)
+After `shipcheck install-hook`, every commit is scanned before it lands in your history:
 
-Run this once in your terminal:
+**Clean commit — silent pass:**
+```
+[main abc1234] add payment route
+```
+
+**Warnings found — commit proceeds with a notice:**
+```
+⚠️  ShipCheck: 2 warnings in staged files (commit allowed)
+
+  1. No input validation on request body — src/app/api/checkout/route.ts
+  2. No rate limiting on auth route — src/app/api/auth/login/route.ts
+```
+
+**Critical found — commit is blocked:**
+```
+❌ ShipCheck blocked: 1 critical issue in staged files
+
+  1. No auth check on API route
+     📁 src/app/api/payments/route.ts:12
+     Anyone can call this endpoint without being logged in. Your payment
+     logic is exposed to the public internet.
+     🔧 Check for a valid session at the top of the handler.
+
+  Fix the issues above, then commit again.
+  To skip this check:  git commit --no-verify
+```
+
+The hook only scans files you're actually committing — not your entire project. Fast, relevant, zero noise.
+
+### On-demand — CLI
+
+Scan any project at any time:
+
+```bash
+shipcheck .                          # scan current directory
+shipcheck /path/to/project           # scan specific path
+shipcheck . --json                   # JSON output for CI
+shipcheck . --checks exposed-secrets # run one specific check
+shipcheck . --fix                    # auto-fix .gitignore entries
+```
+
+### Inside Claude Code or Cursor — MCP server
 
 ```bash
 claude mcp add shipcheck npx @shipcheck/mcp-server
 ```
 
 Then ask Claude:
-```
-> "Scan my project for security issues"
-> "Check if my environment variables are safe"
-> "Is this file secure?"
-```
 
-### Cursor
+> "Scan my project for security issues before I deploy"
+> "Is this API route safe to ship?"
+> "Check if my environment variables are configured correctly"
 
-Add to `~/.cursor/mcp.json`:
+---
 
-```json
-{
-  "mcpServers": {
-    "shipcheck": {
-      "command": "npx",
-      "args": ["-y", "@shipcheck/mcp-server"]
-    }
-  }
-}
-```
+## What It Catches
 
-### MCP Tools Available
+### Critical — blocks commits, fix before shipping
 
-| Tool | What it does |
+| Check | What it finds |
 |---|---|
-| `scan_project` | Full security audit with plain-English report |
-| `scan_file` | Scan a single file for issues |
-| `check_env` | Focused audit of environment variable safety |
+| `exposed-secrets` | Supabase service keys, Stripe secrets, DB URLs in `'use client'` files |
+| `missing-gitignore` | `.env` files not listed in `.gitignore` |
+| `unauth-api-routes` | API routes with no authentication check |
+| `hardcoded-credentials` | OpenAI keys, Stripe keys, AWS tokens in source code |
+| `dangerous-patterns` | `eval()`, `dangerouslySetInnerHTML`, SQL string interpolation |
+| `next-public-secrets` | Secrets leaked via `NEXT_PUBLIC_` environment variables |
+| `supabase-rls` | Supabase tables created without Row Level Security |
+
+### Warnings — commit proceeds, fix soon
+
+| Check | What it finds |
+|---|---|
+| `missing-input-validation` | API routes reading request body without Zod/Yup/Joi |
+| `no-rate-limiting` | Login, OTP, payment routes without rate limiting |
+| `insecure-cors` | Wildcard `*` CORS that allows any origin |
 
 ---
 
-## Monorepo Structure
+## Why Commit-Time?
 
-```
-packages/
-  core/         @shipcheck/core        — Scanner engine (shared logic, 10 checks)
-  mcp-server/   @shipcheck/mcp-server  — MCP server entry point
-  cli/          @shipcheck/cli         — CLI (bin: shipcheck)
-```
+**Why not just run it manually?**
+You won't. Nobody does. Manually-run tools get skipped when you're rushing to ship. A hook runs every time, without you having to remember.
 
-## Development
+**Why not just CI?**
+CI catches issues after the code is already committed and pushed. The hook catches them before bad code enters your history at all — faster feedback, cleaner git log.
 
-```bash
-pnpm install
-pnpm build
+**Why not just ask Claude?**
+Claude's security analysis varies by prompt and context window. ShipCheck runs the same deterministic checks every time. A score of 7/10 means the same thing today and next month.
 
-# Scan a project
-node packages/cli/dist/index.js /path/to/project
+**Does it slow down commits?**
+No. ShipCheck scans only your staged files (not the whole project) and runs in under 100ms on most codebases.
 
-# Run MCP server locally
-node packages/mcp-server/dist/index.js
-```
+**Can I bypass it when I need to?**
+Yes: `git commit --no-verify` skips the hook for one commit. ShipCheck never hard-locks your workflow.
 
 ---
 
-## Security Checks Reference
+## Security & Privacy
 
-| ID | Name | Tier | Severity |
-|---|---|---|---|
-| `exposed-secrets` | Server secrets in client code | 1 | Critical |
-| `missing-gitignore` | .env not in .gitignore | 1 | Critical |
-| `unauth-api-routes` | API routes without auth | 1 | Critical |
-| `hardcoded-credentials` | API keys in source code | 1 | Critical |
-| `dangerous-patterns` | eval, dangerouslySetInnerHTML, SQL injection | 1 | Critical/Warning |
-| `next-public-secrets` | NEXT_PUBLIC_ secret leaks | 2 | Critical |
-| `missing-input-validation` | No Zod/Yup validation on API routes | 2 | Warning |
-| `no-rate-limiting` | Auth routes without rate limiting | 2 | Warning |
-| `supabase-rls` | Tables without Row Level Security | 2 | Critical |
-| `insecure-cors` | Wildcard CORS configuration | 2 | Warning |
+**No code leaves your machine.** ShipCheck runs entirely locally — no API calls, no telemetry, no cloud service. The scan happens in your terminal using the same packages you install from npm.
+
+You can audit every check in the open-source repository: [github.com/patravishek/shipcheck](https://github.com/patravishek/shipcheck)
+
+---
+
+## Packages
+
+| Package | Purpose | Install |
+|---|---|---|
+| `@shipcheck/cli` | Terminal CLI + pre-commit hook | `npm i -g @shipcheck/cli` |
+| `@shipcheck/mcp-server` | MCP server for Claude Code / Cursor | `claude mcp add shipcheck npx @shipcheck/mcp-server` |
+| `@shipcheck/core` | Scanner engine (for building integrations) | `npm i @shipcheck/core` |
 
 ---
 
 ## Roadmap
 
-- **Phase 2** (coming): 20 checks, web report sharing, `--share` flag, expanded MCP tools
-- **Phase 3** (coming): GitHub Action, paid tier, scan history dashboard
-- **Phase 4** (coming): Lovable/Bolt/v0-specific check packs, partner integrations
+- **v0.2** — `--share` flag: generate a shareable link to your scan report
+- **v0.3** — Score history: track your security score over time
+- **v0.4** — GitHub Action: block PRs with new critical issues
+- **v0.5** — 20 checks: Prisma injection, missing CSP headers, JWT in localStorage, and more
 
 ---
 
-## Why ShipCheck?
+## Contributing
 
-Every security tool outputs CWE IDs, CVSS scores, and stack traces. Vibe coders don't speak that language. ShipCheck tells you:
-
-> "Your database password is public" — not "CWE-200: Information Exposure Through an Error Message (CVSS 7.5)"
-
-Built for founders who used Claude Code, Cursor, or Lovable to ship their SaaS — not for enterprise security teams.
+New security checks go in `packages/core/src/checks/tier1/` or `tier2/`. Register them in `packages/core/src/checks/index.ts`. See [CLAUDE.md](./CLAUDE.md) for the full development guide.
 
 ---
 

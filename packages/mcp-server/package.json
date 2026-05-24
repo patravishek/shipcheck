@@ -1,6 +1,6 @@
 {
   "name": "@shipcheck/mcp-server",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "ShipCheck MCP server — security scanner for vibe-coded apps",
   "type": "module",
   "bin": {

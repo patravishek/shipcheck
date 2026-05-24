@@ -1,25 +1,34 @@
 # @shipcheck/mcp-server
 
-> ShipCheck as an MCP server — security scanning inside Claude Code, Cursor, and any MCP-compatible agent.
+**ShipCheck inside Claude Code, Cursor, and any MCP-compatible agent.**
 
-Lets your AI coding agent scan your project for security issues on demand, in plain English. No CWE IDs, no CVSS scores.
+[![npm](https://img.shields.io/npm/v/@shipcheck/mcp-server)](https://www.npmjs.com/package/@shipcheck/mcp-server)
+
+Gives your AI coding agent a dedicated security scanner. Instead of hoping Claude reads the right files and asks the right questions, ShipCheck deterministically scans your entire project and returns structured results Claude can explain and act on.
 
 **No code leaves your machine.** Runs entirely locally.
 
+---
+
 ## Setup
 
-### Claude Code (recommended)
+### Claude Code
+
+Run once in your terminal:
 
 ```bash
 claude mcp add shipcheck npx @shipcheck/mcp-server
 ```
 
-Then start a new Claude session and ask:
+Restart Claude. Then just ask:
+
 > "Scan my project for security issues before I deploy"
+> "Is this API route safe?"
+> "Check if my environment variables are configured correctly"
 
-### Cursor / other MCP clients
+### Cursor
 
-Add to your MCP config (`~/.cursor/mcp.json` or equivalent):
+Add to `~/.cursor/mcp.json`:
 
 ```json
 {
@@ -32,39 +41,51 @@ Add to your MCP config (`~/.cursor/mcp.json` or equivalent):
 }
 ```
 
+---
+
 ## Tools
 
 ### `scan_project`
-Full security audit of a project directory.
+Full security audit of a project directory. Returns a score, critical issues with fix instructions, and a warning summary.
 
 ```
 path    — absolute path to scan (defaults to cwd)
-detail  — "summary" (default) or "full" (includes fix instructions for all warnings)
+detail  — "summary" (default) or "full" (includes fixes for all warnings)
 format  — "json" (default) or "text"
 ```
 
 ### `scan_file`
-Scan a single file and explain any issues found.
+Security audit of a single file — useful when you've just written a new API route or component.
 
 ```
 path    — absolute path to the file (required)
 ```
 
 ### `check_env`
-Focused audit of environment variable safety — detects exposed secrets, missing `.gitignore` entries, and `NEXT_PUBLIC_` leaks.
+Focused audit of environment variable safety. Checks for exposed secrets, missing `.gitignore` entries, and `NEXT_PUBLIC_` leaks.
 
 ```
 path    — absolute path to project directory (defaults to cwd)
 ```
 
-## Example Prompts
+---
 
-> "Run a ShipCheck security scan on this project and tell me what to fix before going live"
+## Why MCP Over Just Asking Claude?
 
-> "Use ShipCheck to scan src/app/api/payment/route.ts"
+| | Asking Claude directly | ShipCheck MCP |
+|---|---|---|
+| Coverage | Files that fit in context window | Every file in your project |
+| Consistency | Varies by prompt and context | Same checks every time |
+| Speed | Minutes for large projects | Under 100ms |
+| API cost | Burns tokens on file reading | Zero — runs locally |
+| Structured output | Free-form text | JSON with score, severity, fix |
 
-> "Check if my environment variables are configured safely"
+---
 
 ## Also Available As
 
-- **CLI** (`@shipcheck/cli`) — `npx @shipcheck/cli .` for standalone terminal use
+**CLI with pre-commit hook** — scans automatically on every `git commit`:
+```bash
+npm install -g @shipcheck/cli
+shipcheck install-hook
+```
