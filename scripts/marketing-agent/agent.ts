@@ -10,14 +10,14 @@
  *   npx tsx scripts/marketing-agent/agent.ts --type tip  (auto-picks a topic)
  *
  * Env vars required:
- *   ANTHROPIC_API_KEY   — Claude API key
+ *   GROQ_API_KEY        — Groq API key (free at console.groq.com)
  *   BUFFER_ACCESS_TOKEN — Buffer publish token
  *   BUFFER_LINKEDIN_ID  — Buffer profile ID for LinkedIn channel
  *   BUFFER_TWITTER_ID   — Buffer profile ID for X/Twitter channel
  *   BUFFER_SCHEDULE_TIME — ISO 8601 datetime to schedule (optional, defaults to now+1h)
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import Groq from 'groq-sdk';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +51,7 @@ function pickTip(topic?: string) {
   return SECURITY_TIPS[week % SECURITY_TIPS.length];
 }
 
-async function generatePosts(client: Anthropic, type: string, opts: Record<string, string>): Promise<PostSet> {
+async function generatePosts(client: Groq, type: string, opts: Record<string, string>): Promise<PostSet> {
   let systemPrompt = `You are the voice of ShipCheck — a security scanner for vibe-coded apps (Next.js, Supabase, Cursor, Claude Code).
 Tone: direct, useful, zero fluff. No buzzwords. No "game-changer". No "🚀". Write like a senior engineer who has seen these bugs in production.
 ShipCheck is open source, free to use via npx, and runs automatically on every git commit via a pre-commit hook.
@@ -117,14 +117,16 @@ TWITTER:
 <twitter post text>`;
   }
 
-  const message = await client.messages.create({
-    model: 'claude-opus-4-7',
+  const message = await client.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
     max_tokens: 1024,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: userPrompt }],
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
   });
 
-  const text = message.content[0].type === 'text' ? message.content[0].text : '';
+  const text = message.choices[0]?.message?.content ?? '';
 
   const linkedinMatch = text.match(/LINKEDIN:\n([\s\S]*?)(?=\nTWITTER:|$)/);
   const twitterMatch  = text.match(/TWITTER:\n([\s\S]*?)$/);
@@ -193,17 +195,17 @@ async function main(): Promise<void> {
   const topic   = get('--topic');
   const when    = get('--at') ?? process.env.BUFFER_SCHEDULE_TIME;
 
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const bufferToken  = process.env.BUFFER_ACCESS_TOKEN;
-  const linkedinId   = process.env.BUFFER_LINKEDIN_ID;
-  const twitterId    = process.env.BUFFER_TWITTER_ID;
+  const groqKey     = process.env.GROQ_API_KEY;
+  const bufferToken = process.env.BUFFER_ACCESS_TOKEN;
+  const linkedinId  = process.env.BUFFER_LINKEDIN_ID;
+  const twitterId   = process.env.BUFFER_TWITTER_ID;
 
-  if (!anthropicKey) throw new Error('ANTHROPIC_API_KEY not set');
+  if (!groqKey)      throw new Error('GROQ_API_KEY not set');
   if (!bufferToken)  throw new Error('BUFFER_ACCESS_TOKEN not set');
   if (!linkedinId)   throw new Error('BUFFER_LINKEDIN_ID not set');
   if (!twitterId)    throw new Error('BUFFER_TWITTER_ID not set');
 
-  const client = new Anthropic({ apiKey: anthropicKey });
+  const client = new Groq({ apiKey: groqKey });
 
   console.log(`\n🤖 Generating ${type} posts with Claude...\n`);
   const posts = await generatePosts(client, type, { version, ...(topic ? { topic } : {}) });
