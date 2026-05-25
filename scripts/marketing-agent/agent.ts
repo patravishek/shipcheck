@@ -152,16 +152,32 @@ TWITTER:
 const BUFFER_GQL = 'https://api.buffer.com/graphql';
 
 async function bufferGql<T>(token: string, query: string, variables?: Record<string, unknown>): Promise<T> {
-  const res = await fetch(BUFFER_GQL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
+  console.log(`  → POST ${BUFFER_GQL}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+
+  let res: Response;
+  try {
+    res = await fetch(BUFFER_GQL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ query, variables }),
+      signal: controller.signal,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Buffer request failed: ${msg}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  console.log(`  ← ${res.status} ${res.statusText}`);
   const json = await res.json() as { data?: T; errors?: { message: string }[] };
   if (json.errors?.length) throw new Error(`Buffer GQL error: ${json.errors.map(e => e.message).join(', ')}`);
+  if (!res.ok) throw new Error(`Buffer HTTP ${res.status}: ${JSON.stringify(json)}`);
   return json.data as T;
 }
 
