@@ -219,28 +219,28 @@ async function scheduleToBuffer(
 
 // ─── List Buffer Channels ─────────────────────────────────────────────────────
 
-async function listChannels(token: string): Promise<void> {
-  const orgData = await bufferGql<{ organizations: { id: string; name: string }[] }>(token, `
-    query { organizations { id name } }
-  `);
-
-  const org = orgData.organizations?.[0];
-  if (!org) throw new Error('No organizations found on this Buffer account');
-  console.log(`\nOrganization: ${org.name} (${org.id})\n`);
-
-  const chanData = await bufferGql<{ channels: BufferChannel[] }>(token, `
-    query GetChannels($input: ChannelsInput!) {
-      channels(input: $input) { id service name }
+async function introspect(token: string): Promise<void> {
+  const data = await bufferGql<{ __schema: { queryType: { fields: { name: string; args: { name: string; type: { name: string; kind: string; ofType: { name: string } } }[] }[] } } }>(token, `
+    query {
+      __schema {
+        queryType {
+          fields {
+            name
+            args { name type { name kind ofType { name } } }
+          }
+        }
+      }
     }
-  `, { input: { organizationId: org.id } });
-
-  console.log('Connected channels:\n');
-  for (const c of chanData.channels) {
-    console.log(`  service : ${c.service}`);
-    console.log(`  name    : ${c.name}`);
-    console.log(`  id      : ${c.id}   ← BUFFER_${c.service.toUpperCase()}_CHANNEL`);
-    console.log('');
+  `);
+  console.log('\nAvailable queries:\n');
+  for (const f of data.__schema.queryType.fields) {
+    const args = f.args.map(a => `${a.name}: ${a.type.name ?? a.type.ofType?.name}`).join(', ');
+    console.log(`  ${f.name}(${args})`);
   }
+}
+
+async function listChannels(token: string): Promise<void> {
+  await introspect(token);
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
