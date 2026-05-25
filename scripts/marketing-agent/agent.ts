@@ -10,11 +10,11 @@
  *   npx tsx scripts/marketing-agent/agent.ts --type tip  (auto-picks a topic)
  *
  * Env vars required:
- *   GROQ_API_KEY        — Groq API key (free at console.groq.com)
- *   BUFFER_ACCESS_TOKEN — Buffer publish token
- *   BUFFER_LINKEDIN_ID  — Buffer profile ID for LinkedIn channel
- *   BUFFER_TWITTER_ID   — Buffer profile ID for X/Twitter channel
- *   BUFFER_SCHEDULE_TIME — ISO 8601 datetime to schedule (optional, defaults to now+1h)
+ *   GROQ_API_KEY              — Groq API key (free at console.groq.com)
+ *   BUFFER_ACCESS_TOKEN       — Buffer personal token (publish.buffer.com/settings/api)
+ *   BUFFER_LINKEDIN_CHANNEL   — Buffer channel ID for LinkedIn
+ *   BUFFER_TWITTER_CHANNEL    — Buffer channel ID for X/Twitter
+ *   BUFFER_SCHEDULE_TIME      — ISO 8601 datetime to schedule (optional, defaults to now+1h)
  */
 
 import Groq from 'groq-sdk';
@@ -26,10 +26,20 @@ interface PostSet {
   twitter: string;
 }
 
-interface BufferCreateResponse {
-  success: boolean;
-  buffer_count?: number;
-  updates?: { id: string; scheduled_at: number }[];
+interface BufferChannel {
+  id: string;
+  service: string;
+  name: string;
+}
+
+interface BufferPostResult {
+  data?: {
+    createPost?: {
+      post?: { id: string; dueAt: string };
+      message?: string;
+    };
+  };
+  errors?: { message: string }[];
 }
 
 // ─── Content Generation ───────────────────────────────────────────────────────
@@ -137,63 +147,72 @@ TWITTER:
   };
 }
 
-// ─── Buffer API ───────────────────────────────────────────────────────────────
+// ─── Buffer GraphQL API ───────────────────────────────────────────────────────
+
+const BUFFER_GQL = 'https://api.buffer.com/graphql';
+
+async function bufferGql<T>(token: string, query: string, variables?: Record<string, unknown>): Promise<T> {
+  const res = await fetch(BUFFER_GQL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  const json = await res.json() as { data?: T; errors?: { message: string }[] };
+  if (json.errors?.length) throw new Error(`Buffer GQL error: ${json.errors.map(e => e.message).join(', ')}`);
+  return json.data as T;
+}
 
 async function scheduleToBuffer(
   posts: PostSet,
   token: string,
-  linkedinId: string,
-  twitterId: string,
+  linkedinChannelId: string,
+  twitterChannelId: string,
   scheduledAt?: string,
 ): Promise<void> {
-  const when = scheduledAt
-    ? Math.floor(new Date(scheduledAt).getTime() / 1000)
-    : Math.floor(Date.now() / 1000) + 3600;
+  const dueAt = scheduledAt
+    ? new Date(scheduledAt).toISOString()
+    : new Date(Date.now() + 3600_000).toISOString();
 
-  const base = 'https://api.bufferapp.com/1';
-
-  async function create(profileId: string, text: string, platform: string): Promise<void> {
-    const body = new URLSearchParams({
-      access_token: token,
-      text,
-      'profile_ids[]': profileId,
-      scheduled_at: String(when),
-    });
-
-    const res = await fetch(`${base}/updates/create.json`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    });
-
-    const data = await res.json() as BufferCreateResponse;
-
-    if (!res.ok || !data.success) {
-      throw new Error(`Buffer ${platform} error: ${JSON.stringify(data)}`);
+  const mutation = `
+    mutation CreatePost($channelId: String!, $text: String!, $dueAt: DateTime!) {
+      createPost(input: {
+        channelId: $channelId
+        text: $text
+        schedulingType: scheduled
+        dueAt: $dueAt
+      }) {
+        ... on PostActionSuccess { post { id dueAt } }
+        ... on MutationError { message }
+      }
     }
+  `;
 
-    const id = data.updates?.[0]?.id ?? 'unknown';
-    const time = new Date(when * 1000).toLocaleString();
-    console.log(`✅ ${platform} scheduled — Buffer ID: ${id}, time: ${time}`);
+  async function post(channelId: string, text: string, platform: string): Promise<void> {
+    const data = await bufferGql<BufferPostResult['data']>(token, mutation, { channelId, text, dueAt });
+    const result = data?.createPost;
+    if ('message' in (result ?? {})) throw new Error(`Buffer ${platform}: ${(result as { message: string }).message}`);
+    console.log(`✅ ${platform} scheduled — post ID: ${(result as { post: { id: string; dueAt: string } }).post.id}, time: ${dueAt}`);
   }
 
-  await create(linkedinId, posts.linkedin, 'LinkedIn');
-  await create(twitterId,  posts.twitter,  'X/Twitter');
+  await post(linkedinChannelId, posts.linkedin, 'LinkedIn');
+  await post(twitterChannelId,  posts.twitter,  'X/Twitter');
 }
 
-// ─── List Buffer Profiles ─────────────────────────────────────────────────────
+// ─── List Buffer Channels ─────────────────────────────────────────────────────
 
-async function listProfiles(token: string): Promise<void> {
-  const res  = await fetch(`https://api.bufferapp.com/1/profiles.json?access_token=${token}`);
-  const data = await res.json() as { id: string; service: string; service_username: string }[];
+async function listChannels(token: string): Promise<void> {
+  const data = await bufferGql<{ channels: BufferChannel[] }>(token, `
+    query { channels { id service name } }
+  `);
 
-  if (!res.ok) throw new Error(`Buffer error: ${JSON.stringify(data)}`);
-
-  console.log('\nConnected Buffer profiles:\n');
-  for (const p of data) {
-    console.log(`  service : ${p.service}`);
-    console.log(`  username: ${p.service_username}`);
-    console.log(`  id      : ${p.id}   ← use this as BUFFER_${p.service.toUpperCase()}_ID`);
+  console.log('\nConnected Buffer channels:\n');
+  for (const c of data.channels) {
+    console.log(`  service : ${c.service}`);
+    console.log(`  name    : ${c.name}`);
+    console.log(`  id      : ${c.id}   ← use this as BUFFER_${c.service.toUpperCase()}_CHANNEL`);
     console.log('');
   }
 }
@@ -212,25 +231,25 @@ async function main(): Promise<void> {
   const topic   = get('--topic');
   const when    = get('--at') ?? process.env.BUFFER_SCHEDULE_TIME;
 
-  const groqKey     = process.env.GROQ_API_KEY;
-  const bufferToken = process.env.BUFFER_ACCESS_TOKEN;
-  const linkedinId  = process.env.BUFFER_LINKEDIN_ID;
-  const twitterId   = process.env.BUFFER_TWITTER_ID;
+  const groqKey        = process.env.GROQ_API_KEY;
+  const bufferToken    = process.env.BUFFER_ACCESS_TOKEN;
+  const linkedinChannel = process.env.BUFFER_LINKEDIN_CHANNEL;
+  const twitterChannel  = process.env.BUFFER_TWITTER_CHANNEL;
 
   if (!bufferToken) throw new Error('BUFFER_ACCESS_TOKEN not set');
 
-  if (args.includes('--list-profiles')) {
-    await listProfiles(bufferToken);
+  if (args.includes('--list-channels')) {
+    await listChannels(bufferToken);
     return;
   }
 
-  if (!groqKey)    throw new Error('GROQ_API_KEY not set');
-  if (!linkedinId) throw new Error('BUFFER_LINKEDIN_ID not set');
-  if (!twitterId)  throw new Error('BUFFER_TWITTER_ID not set');
+  if (!groqKey)         throw new Error('GROQ_API_KEY not set');
+  if (!linkedinChannel) throw new Error('BUFFER_LINKEDIN_CHANNEL not set');
+  if (!twitterChannel)  throw new Error('BUFFER_TWITTER_CHANNEL not set');
 
   const client = new Groq({ apiKey: groqKey });
 
-  console.log(`\n🤖 Generating ${type} posts with Claude...\n`);
+  console.log(`\n🤖 Generating ${type} posts...\n`);
   const posts = await generatePosts(client, type, { version, ...(topic ? { topic } : {}) });
 
   console.log('─── LinkedIn ────────────────────────────────────');
@@ -245,8 +264,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log('📬 Scheduling to Buffer...\n');
-  await scheduleToBuffer(posts, bufferToken, linkedinId, twitterId, when);
+  console.log('📬 Scheduling via Buffer GraphQL API...\n');
+  await scheduleToBuffer(posts, bufferToken, linkedinChannel, twitterChannel, when);
   console.log('\nDone. Check your Buffer queue to review before it goes live.\n');
 }
 

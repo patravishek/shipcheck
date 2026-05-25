@@ -49,8 +49,8 @@ jobs:
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
-          BUFFER_LINKEDIN_ID: ${{ secrets.BUFFER_LINKEDIN_ID }}
-          BUFFER_TWITTER_ID: ${{ secrets.BUFFER_TWITTER_ID }}
+          BUFFER_LINKEDIN_CHANNEL: ${{ secrets.BUFFER_LINKEDIN_CHANNEL }}
+          BUFFER_TWITTER_CHANNEL: ${{ secrets.BUFFER_TWITTER_CHANNEL }}
           BUFFER_SCHEDULE_TIME: ${{ inputs.schedule_time }}
         run: |
           ARGS="--type ${{ inputs.type || 'tip' }}"
