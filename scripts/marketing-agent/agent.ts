@@ -193,11 +193,11 @@ async function scheduleToBuffer(
     : new Date(Date.now() + 3600_000).toISOString();
 
   const mutation = `
-    mutation CreatePost($channelId: String!, $text: String!, $dueAt: DateTime!) {
+    mutation CreatePost($channelId: ChannelId!, $text: String!, $dueAt: DateTime!) {
       createPost(input: {
         channelId: $channelId
         text: $text
-        schedulingType: scheduled
+        mode: customScheduled
         dueAt: $dueAt
       }) {
         ... on PostActionSuccess { post { id dueAt } }
