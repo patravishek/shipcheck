@@ -55,14 +55,30 @@ const SECURITY_TIPS = [
   { topic: 'unauth-api-routes',           headline: "An API route with no auth check is a public endpoint — anyone can call it" },
 ];
 
+// Rotates by day so each run gets a fresh topic
 function pickTip(topic?: string) {
   if (topic) return SECURITY_TIPS.find(t => t.topic === topic) ?? SECURITY_TIPS[0];
-  const week = Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000));
-  return SECURITY_TIPS[week % SECURITY_TIPS.length];
+  const day = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
+  return SECURITY_TIPS[day % SECURITY_TIPS.length];
 }
 
+// Four tweet angles — rotate by hour slot so same-day tweets feel different
+const TWEET_ANGLES = ['risk', 'fix', 'tool', 'question'] as const;
+type TweetAngle = typeof TWEET_ANGLES[number];
+
+function pickAngle(slot: number): TweetAngle {
+  return TWEET_ANGLES[slot % TWEET_ANGLES.length];
+}
+
+const ANGLE_PROMPTS: Record<TweetAngle, (tip: typeof SECURITY_TIPS[0]) => string> = {
+  risk:     t => `Tweet about the RISK: "${t.headline}". What goes wrong when this bug exists? Make it concrete — data leaked, account taken over, bill spiked. Max 240 chars, leave room for the npm command. End with: npx @shipcheck/cli .`,
+  fix:     t => `Tweet about the FIX for: "${t.headline}". One sentence on what's wrong, one sentence on the exact code fix. Max 240 chars. End with: ShipCheck catches this automatically.`,
+  tool:     t => `Tweet promoting ShipCheck as the solution for: "${t.headline}". Lead with the problem in 10 words, then: "ShipCheck catches this on every git commit — shipcheck install-hook". Max 260 chars.`,
+  question: t => `Ask the dev community a genuine question related to: "${t.headline}". Something they'll actually answer. No marketing in the question itself — just curiosity. Under 200 chars. Can mention ShipCheck briefly at the end.`,
+};
+
 async function generatePosts(client: Groq, type: string, opts: Record<string, string>): Promise<PostSet> {
-  let systemPrompt = `You are the voice of ShipCheck — a security scanner for vibe-coded apps (Next.js, Supabase, Cursor, Claude Code).
+  const systemPrompt = `You are the voice of ShipCheck — a security scanner for vibe-coded apps (Next.js, Supabase, Cursor, Claude Code).
 Tone: direct, useful, zero fluff. No buzzwords. No "game-changer". No "🚀". Write like a senior engineer who has seen these bugs in production.
 ShipCheck is open source, free to use via npx, and runs automatically on every git commit via a pre-commit hook.
 npm: @shipcheck/cli. GitHub: github.com/patravishek/shipcheck`;
@@ -70,61 +86,66 @@ npm: @shipcheck/cli. GitHub: github.com/patravishek/shipcheck`;
   let userPrompt: string;
 
   if (type === 'release') {
-    const { version, checks } = opts;
-    userPrompt = `Write two posts announcing ShipCheck v${version}.
+    userPrompt = `Write two posts announcing ShipCheck v${opts.version}.
 
-What's new in this release:
-- Git log attestation: every clean commit now gets "ShipCheck: score:X/10 | criticals:N | warnings:N" appended to the commit message — your git log becomes a security audit trail
-- Fix prompt: when critical issues are found, the CLI prints a paste-ready Claude Code/Cursor prompt to fix them
-- 3 new security checks:
-  1. cursor-rules-backdoor (critical): detects hidden Unicode in .cursor/rules, CLAUDE.md — a supply chain attack that makes your AI write backdoored code invisibly
-  2. supabase-deprecated-session (critical): getSession() in server-side code trusts a forgeable cookie; flags and tells you to use getUser()
-  3. server-action-auth (warning): Next.js server actions in 'use server' files with no auth check — any unauthenticated client can invoke them
+What's new:
+- Git log attestation: every clean commit gets "ShipCheck: score:X/10 | criticals:N | warnings:N" appended to the commit message
+- Fix prompt: CLI prints a paste-ready Claude Code/Cursor prompt when criticals are found
+- 3 new checks:
+  1. cursor-rules-backdoor (critical): hidden Unicode in .cursor/rules, CLAUDE.md — supply chain attack, makes your AI write backdoored code invisibly
+  2. supabase-deprecated-session (critical): getSession() on the server trusts a forgeable cookie; use getUser()
+  3. server-action-auth (warning): server actions in 'use server' files with no auth — any unauthenticated client can invoke them
 
 LinkedIn post:
-- 3–5 short paragraphs, no more than 200 words total
-- Lead with the most interesting/surprising insight (the hidden Unicode backdoor angle is strong)
+- 3–5 short paragraphs, max 200 words
+- Lead with the hidden Unicode backdoor angle — it's the most surprising
 - End with: "npx @shipcheck/cli . to scan your project. Install the hook: shipcheck install-hook"
-- Use line breaks for readability. One or two emojis max, tasteful only.
+- Max two emojis
 
 Twitter/X post:
 - Single tweet, max 280 characters
-- Hook first — make someone stop scrolling
-- End with the npm command or a link hook
+- Hook first, npm command at the end
 
 Respond in this exact format:
 LINKEDIN:
-<linkedin post text>
+<linkedin post>
 
 TWITTER:
-<twitter post text>`;
+<twitter post>`;
+
+  } else if (type === 'tweet') {
+    // Twitter-only: specific angle for variety across multiple daily posts
+    const tip   = pickTip(opts.topic);
+    const angle = (opts.angle as TweetAngle | undefined) ?? pickAngle(Number(opts.slot ?? 0));
+    userPrompt  = `Write a single tweet (max 280 chars). ${ANGLE_PROMPTS[angle](tip)}\n\nRespond with ONLY the tweet text, nothing else.`;
+
   } else {
+    // Daily tip — both platforms
     const tip = pickTip(opts.topic);
-    userPrompt = `Write two posts about this security issue that vibe coders commonly make:
+    userPrompt = `Write two posts about this security issue vibe coders commonly hit:
 
 Topic: ${tip.topic}
 Key insight: ${tip.headline}
-
-ShipCheck detects this automatically (check ID: ${tip.topic}).
+ShipCheck check ID: ${tip.topic}
 
 LinkedIn post:
-- 2–3 short paragraphs, under 150 words
-- Explain WHY this is dangerous in plain English — no CVE IDs, no jargon
-- Show a quick code example if it helps
+- 2–3 paragraphs, under 150 words
+- Explain WHY it's dangerous in plain English
+- Show a code snippet if it helps
 - End with: "ShipCheck catches this automatically on every git commit. Install: npm i -g @shipcheck/cli && shipcheck install-hook"
 - One emoji max
 
 Twitter/X post:
 - Single tweet, max 280 chars
 - Lead with the danger, end with the fix or the tool
-- No hashtag spam — one at most (#shipit or #buildinpublic if relevant)
+- One hashtag max (#buildinpublic or #shipit)
 
 Respond in this exact format:
 LINKEDIN:
-<linkedin post text>
+<linkedin post>
 
 TWITTER:
-<twitter post text>`;
+<twitter post>`;
   }
 
   const message = await client.chat.completions.create({
@@ -214,8 +235,8 @@ async function scheduleToBuffer(
     console.log(`✅ ${platform} scheduled — post ID: ${(result as { post: { id: string; dueAt: string } }).post.id}, time: ${dueAt}`);
   }
 
-  await post(linkedinChannelId, posts.linkedin, 'LinkedIn');
-  await post(twitterChannelId,  posts.twitter,  'X/Twitter');
+  if (linkedinChannelId && posts.linkedin) await post(linkedinChannelId, posts.linkedin, 'LinkedIn');
+  if (twitterChannelId  && posts.twitter)  await post(twitterChannelId,  posts.twitter,  'X/Twitter');
 }
 
 // ─── List Buffer Channels ─────────────────────────────────────────────────────
@@ -256,13 +277,15 @@ async function main(): Promise<void> {
     return i !== -1 ? args[i + 1] : undefined;
   };
 
-  const type    = get('--type')    ?? 'tip';
-  const version = get('--version') ?? '0.1.4';
-  const topic   = get('--topic');
-  const when    = get('--at') ?? process.env.BUFFER_SCHEDULE_TIME;
+  const type     = get('--type')     ?? 'tip';
+  const version  = get('--version')  ?? '0.1.4';
+  const topic    = get('--topic');
+  const platform = get('--platform') ?? 'both';   // linkedin | twitter | both
+  const slot     = get('--slot')     ?? '0';       // 0-3 for Twitter angle rotation
+  const when     = get('--at') ?? process.env.BUFFER_SCHEDULE_TIME;
 
-  const groqKey        = process.env.GROQ_API_KEY;
-  const bufferToken    = process.env.BUFFER_ACCESS_TOKEN;
+  const groqKey         = process.env.GROQ_API_KEY;
+  const bufferToken     = process.env.BUFFER_ACCESS_TOKEN;
   const linkedinChannel = process.env.BUFFER_LINKEDIN_CHANNEL;
   const twitterChannel  = process.env.BUFFER_TWITTER_CHANNEL;
 
@@ -273,30 +296,54 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (!groqKey)         throw new Error('GROQ_API_KEY not set');
-  if (!linkedinChannel) throw new Error('BUFFER_LINKEDIN_CHANNEL not set');
-  if (!twitterChannel)  throw new Error('BUFFER_TWITTER_CHANNEL not set');
+  if (!groqKey) throw new Error('GROQ_API_KEY not set');
+  if ((platform === 'linkedin' || platform === 'both') && !linkedinChannel) throw new Error('BUFFER_LINKEDIN_CHANNEL not set');
+  if ((platform === 'twitter'  || platform === 'both') && !twitterChannel)  throw new Error('BUFFER_TWITTER_CHANNEL not set');
 
   const client = new Groq({ apiKey: groqKey });
+  const opts   = { version, slot, ...(topic ? { topic } : {}) };
 
-  console.log(`\n🤖 Generating ${type} posts...\n`);
-  const posts = await generatePosts(client, type, { version, ...(topic ? { topic } : {}) });
-
-  console.log('─── LinkedIn ────────────────────────────────────');
-  console.log(posts.linkedin);
-  console.log('\n─── X/Twitter ───────────────────────────────────');
-  console.log(posts.twitter);
-  console.log('\n─────────────────────────────────────────────────\n');
+  console.log(`\n🤖 Generating ${type} post${platform !== 'both' ? ` (${platform})` : 's'}...\n`);
 
   const dryRun = args.includes('--dry-run');
-  if (dryRun) {
-    console.log('Dry run — not scheduling. Remove --dry-run to post.');
+
+  if (type === 'tweet' || platform === 'twitter') {
+    // Twitter-only: generate one tweet with a specific angle
+    const posts = await generatePosts(client, 'tweet', opts);
+    console.log('─── X/Twitter ───────────────────────────────────');
+    console.log(posts.twitter);
+    console.log('─────────────────────────────────────────────────\n');
+    if (!dryRun) {
+      console.log('📬 Scheduling to X/Twitter via Buffer...\n');
+      const dueAt = when ? new Date(when).toISOString() : new Date(Date.now() + 3600_000).toISOString();
+      await scheduleToBuffer({ linkedin: '', twitter: posts.twitter }, bufferToken, '', twitterChannel!, when);
+    }
     return;
   }
 
+  // Both platforms or LinkedIn-only
+  const posts = await generatePosts(client, type, opts);
+
+  if (platform === 'both' || platform === 'linkedin') {
+    console.log('─── LinkedIn ────────────────────────────────────');
+    console.log(posts.linkedin);
+    console.log('');
+  }
+  if (platform === 'both') {
+    console.log('─── X/Twitter ───────────────────────────────────');
+    console.log(posts.twitter);
+  }
+  console.log('─────────────────────────────────────────────────\n');
+
+  if (dryRun) { console.log('Dry run — not scheduling.'); return; }
+
   console.log('📬 Scheduling via Buffer GraphQL API...\n');
-  await scheduleToBuffer(posts, bufferToken, linkedinChannel, twitterChannel, when);
-  console.log('\nDone. Check your Buffer queue to review before it goes live.\n');
+  if (platform === 'linkedin') {
+    await scheduleToBuffer({ linkedin: posts.linkedin, twitter: '' }, bufferToken, linkedinChannel!, '', when);
+  } else {
+    await scheduleToBuffer(posts, bufferToken, linkedinChannel!, twitterChannel!, when);
+  }
+  console.log('\nDone.\n');
 }
 
 main().catch(err => {

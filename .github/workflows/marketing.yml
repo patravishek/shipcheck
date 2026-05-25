@@ -1,51 +1,63 @@
 name: Marketing Agent
 
-on:
-  # Weekly security tip — every Monday at 9am IST (3:30am UTC)
-  schedule:
-    - cron: '30 3 * * 1'
+# IST = UTC+5:30
+# LinkedIn  — 6:30 PM IST = 13:00 UTC daily
+# Twitter 1 — 8:00 AM IST = 02:30 UTC (risk angle)
+# Twitter 2 — 12:00 PM IST = 06:30 UTC (fix angle)
+# Twitter 3 — 6:30 PM IST = 13:00 UTC (tool angle, same time as LinkedIn)
+# Twitter 4 — 9:00 PM IST = 15:30 UTC (question angle)
 
-  # Manual trigger — for release announcements or on-demand posts
+on:
+  schedule:
+    - cron: '0 13 * * *'   # LinkedIn + Twitter slot 2
+    - cron: '30 2 * * *'   # Twitter slot 0
+    - cron: '30 6 * * *'   # Twitter slot 1
+    - cron: '30 15 * * *'  # Twitter slot 3
+
   workflow_dispatch:
     inputs:
       type:
-        description: 'Post type'
+        description: 'Post type (tip | release | tweet)'
         required: true
         default: tip
         type: choice
-        options:
-          - tip
-          - release
+        options: [tip, release, tweet]
+      platform:
+        description: 'Platform'
+        required: true
+        default: both
+        type: choice
+        options: [both, linkedin, twitter]
       version:
-        description: 'Version (for release posts only, e.g. 0.1.4)'
+        description: 'Version (release posts only)'
         required: false
         default: ''
       topic:
-        description: 'Security topic (for tip posts, leave blank to auto-rotate)'
+        description: 'Security topic (leave blank to auto-rotate)'
         required: false
         default: ''
+      slot:
+        description: 'Tweet angle slot 0-3 (0=risk 1=fix 2=tool 3=question)'
+        required: false
+        default: '0'
       schedule_time:
-        description: 'ISO 8601 schedule time (e.g. 2026-05-28T09:00:00+05:30). Blank = 1 hour from now'
+        description: 'ISO 8601 schedule time e.g. 2026-05-27T18:30:00+05:30 (blank = 1h from now)'
         required: false
         default: ''
 
 jobs:
-  post:
+  linkedin:
+    name: LinkedIn daily tip
+    if: github.event.schedule == '0 13 * * *' || (github.event_name == 'workflow_dispatch' && (inputs.platform == 'linkedin' || inputs.platform == 'both'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Install tsx
-        run: npm install -g tsx
-
-      - name: Install agent dependencies
-        run: npm install --prefix scripts/marketing-agent groq-sdk
-
-      - name: Run marketing agent
+      - run: npm install -g tsx
+      - run: npm install --prefix scripts/marketing-agent groq-sdk
+      - name: Post to LinkedIn
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
@@ -53,7 +65,80 @@ jobs:
           BUFFER_TWITTER_CHANNEL: ${{ secrets.BUFFER_TWITTER_CHANNEL }}
           BUFFER_SCHEDULE_TIME: ${{ inputs.schedule_time }}
         run: |
-          ARGS="--type ${{ inputs.type || 'tip' }}"
-          if [ -n "${{ inputs.version }}" ]; then ARGS="$ARGS --version ${{ inputs.version }}"; fi
-          if [ -n "${{ inputs.topic }}" ];   then ARGS="$ARGS --topic ${{ inputs.topic }}"; fi
-          tsx scripts/marketing-agent/agent.ts $ARGS
+          tsx scripts/marketing-agent/agent.ts \
+            --type ${{ inputs.type || 'tip' }} \
+            --platform linkedin \
+            ${{ inputs.version && format('--version {0}', inputs.version) || '' }} \
+            ${{ inputs.topic && format('--topic {0}', inputs.topic) || '' }}
+
+  twitter-slot-0:
+    name: Twitter 8am (risk)
+    if: github.event.schedule == '30 2 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install -g tsx
+      - run: npm install --prefix scripts/marketing-agent groq-sdk
+      - name: Tweet
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
+          BUFFER_TWITTER_CHANNEL: ${{ secrets.BUFFER_TWITTER_CHANNEL }}
+        run: tsx scripts/marketing-agent/agent.ts --type tweet --platform twitter --slot 0
+
+  twitter-slot-1:
+    name: Twitter 12pm (fix)
+    if: github.event.schedule == '30 6 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install -g tsx
+      - run: npm install --prefix scripts/marketing-agent groq-sdk
+      - name: Tweet
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
+          BUFFER_TWITTER_CHANNEL: ${{ secrets.BUFFER_TWITTER_CHANNEL }}
+        run: tsx scripts/marketing-agent/agent.ts --type tweet --platform twitter --slot 1
+
+  twitter-slot-2:
+    name: Twitter 6:30pm (tool)
+    if: github.event.schedule == '0 13 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install -g tsx
+      - run: npm install --prefix scripts/marketing-agent groq-sdk
+      - name: Tweet
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
+          BUFFER_TWITTER_CHANNEL: ${{ secrets.BUFFER_TWITTER_CHANNEL }}
+        run: tsx scripts/marketing-agent/agent.ts --type tweet --platform twitter --slot 2
+
+  twitter-slot-3:
+    name: Twitter 9pm (question)
+    if: github.event.schedule == '30 15 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install -g tsx
+      - run: npm install --prefix scripts/marketing-agent groq-sdk
+      - name: Tweet
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
+          BUFFER_TWITTER_CHANNEL: ${{ secrets.BUFFER_TWITTER_CHANNEL }}
+        run: tsx scripts/marketing-agent/agent.ts --type tweet --platform twitter --slot 3
