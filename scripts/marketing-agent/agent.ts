@@ -206,7 +206,7 @@ async function scheduleToBuffer(
     }
   `;
 
-  async function post(channelId: string, text: string, platform: string): Promise<void> {
+  async function post(channelId: string, text: string, platform: string) {
     const data = await bufferGql<BufferPostResult['data']>(token, mutation, { channelId, text, dueAt });
     const result = data?.createPost;
     if ('message' in (result ?? {})) throw new Error(`Buffer ${platform}: ${(result as { message: string }).message}`);
@@ -220,15 +220,25 @@ async function scheduleToBuffer(
 // ─── List Buffer Channels ─────────────────────────────────────────────────────
 
 async function listChannels(token: string): Promise<void> {
-  const data = await bufferGql<{ channels: BufferChannel[] }>(token, `
-    query { channels { id service name } }
+  const orgData = await bufferGql<{ organizations: { id: string; name: string }[] }>(token, `
+    query { organizations { id name } }
   `);
 
-  console.log('\nConnected Buffer channels:\n');
-  for (const c of data.channels) {
+  const org = orgData.organizations?.[0];
+  if (!org) throw new Error('No organizations found on this Buffer account');
+  console.log(`\nOrganization: ${org.name} (${org.id})\n`);
+
+  const chanData = await bufferGql<{ channels: BufferChannel[] }>(token, `
+    query GetChannels($input: ChannelsInput!) {
+      channels(input: $input) { id service name }
+    }
+  `, { input: { organizationId: org.id } });
+
+  console.log('Connected channels:\n');
+  for (const c of chanData.channels) {
     console.log(`  service : ${c.service}`);
     console.log(`  name    : ${c.name}`);
-    console.log(`  id      : ${c.id}   ← use this as BUFFER_${c.service.toUpperCase()}_CHANNEL`);
+    console.log(`  id      : ${c.id}   ← BUFFER_${c.service.toUpperCase()}_CHANNEL`);
     console.log('');
   }
 }
