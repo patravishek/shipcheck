@@ -219,6 +219,13 @@ async function scheduleToBuffer(
 
 // ─── List Buffer Channels ─────────────────────────────────────────────────────
 
+async function introspectEnum(token: string, typeName: string): Promise<void> {
+  const data = await bufferGql<{ __type: { enumValues: { name: string }[] } }>(token, `
+    query { __type(name: "${typeName}") { enumValues { name } } }
+  `);
+  console.log(`\n${typeName} values:`, data.__type.enumValues.map(e => e.name).join(', '));
+}
+
 async function getOrgId(token: string): Promise<string> {
   const data = await bufferGql<{ account: { organizations: { id: string }[] } }>(token, `
     query { account { organizations { id name } } }
@@ -277,6 +284,10 @@ async function main(): Promise<void> {
   if (!twitterChannel)  throw new Error('BUFFER_TWITTER_CHANNEL not set');
 
   const client = new Groq({ apiKey: groqKey });
+
+  await introspectEnum(bufferToken, 'SchedulingType');
+  await introspectEnum(bufferToken, 'ShareMode');
+  return;
 
   console.log(`\n🤖 Generating ${type} posts...\n`);
   const posts = await generatePosts(client, type, { version, ...(topic ? { topic } : {}) });
