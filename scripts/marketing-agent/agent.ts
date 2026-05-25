@@ -219,28 +219,26 @@ async function scheduleToBuffer(
 
 // ─── List Buffer Channels ─────────────────────────────────────────────────────
 
-async function introspect(token: string): Promise<void> {
-  const data = await bufferGql<{ __schema: { queryType: { fields: { name: string; args: { name: string; type: { name: string; kind: string; ofType: { name: string } } }[] }[] } } }>(token, `
+async function listChannels(token: string): Promise<void> {
+  // Step 1 — get account fields to find org ID
+  const accountType = await bufferGql<{ __type: { fields: { name: string }[] } }>(token, `
+    query { __type(name: "Account") { fields { name } } }
+  `);
+  console.log('\nAccount fields:', accountType.__type.fields.map(f => f.name).join(', '));
+
+  // Step 2 — fetch account with all likely org-related fields
+  const accountData = await bufferGql<Record<string, unknown>>(token, `
     query {
-      __schema {
-        queryType {
-          fields {
-            name
-            args { name type { name kind ofType { name } } }
-          }
-        }
+      account {
+        id
+        name
+        email
+        currentOrganization { id name }
+        organizations { id name }
       }
     }
   `);
-  console.log('\nAvailable queries:\n');
-  for (const f of data.__schema.queryType.fields) {
-    const args = f.args.map(a => `${a.name}: ${a.type.name ?? a.type.ofType?.name}`).join(', ');
-    console.log(`  ${f.name}(${args})`);
-  }
-}
-
-async function listChannels(token: string): Promise<void> {
-  await introspect(token);
+  console.log('\nAccount data:', JSON.stringify(accountData, null, 2));
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
