@@ -181,6 +181,23 @@ async function scheduleToBuffer(
   await create(twitterId,  posts.twitter,  'X/Twitter');
 }
 
+// ─── List Buffer Profiles ─────────────────────────────────────────────────────
+
+async function listProfiles(token: string): Promise<void> {
+  const res  = await fetch(`https://api.bufferapp.com/1/profiles.json?access_token=${token}`);
+  const data = await res.json() as { id: string; service: string; service_username: string }[];
+
+  if (!res.ok) throw new Error(`Buffer error: ${JSON.stringify(data)}`);
+
+  console.log('\nConnected Buffer profiles:\n');
+  for (const p of data) {
+    console.log(`  service : ${p.service}`);
+    console.log(`  username: ${p.service_username}`);
+    console.log(`  id      : ${p.id}   ← use this as BUFFER_${p.service.toUpperCase()}_ID`);
+    console.log('');
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -200,10 +217,16 @@ async function main(): Promise<void> {
   const linkedinId  = process.env.BUFFER_LINKEDIN_ID;
   const twitterId   = process.env.BUFFER_TWITTER_ID;
 
-  if (!groqKey)      throw new Error('GROQ_API_KEY not set');
-  if (!bufferToken)  throw new Error('BUFFER_ACCESS_TOKEN not set');
-  if (!linkedinId)   throw new Error('BUFFER_LINKEDIN_ID not set');
-  if (!twitterId)    throw new Error('BUFFER_TWITTER_ID not set');
+  if (!bufferToken) throw new Error('BUFFER_ACCESS_TOKEN not set');
+
+  if (args.includes('--list-profiles')) {
+    await listProfiles(bufferToken);
+    return;
+  }
+
+  if (!groqKey)    throw new Error('GROQ_API_KEY not set');
+  if (!linkedinId) throw new Error('BUFFER_LINKEDIN_ID not set');
+  if (!twitterId)  throw new Error('BUFFER_TWITTER_ID not set');
 
   const client = new Groq({ apiKey: groqKey });
 
