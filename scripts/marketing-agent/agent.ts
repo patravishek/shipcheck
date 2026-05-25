@@ -219,26 +219,31 @@ async function scheduleToBuffer(
 
 // ─── List Buffer Channels ─────────────────────────────────────────────────────
 
-async function listChannels(token: string): Promise<void> {
-  // Step 1 — get account fields to find org ID
-  const accountType = await bufferGql<{ __type: { fields: { name: string }[] } }>(token, `
-    query { __type(name: "Account") { fields { name } } }
+async function getOrgId(token: string): Promise<string> {
+  const data = await bufferGql<{ account: { organizations: { id: string }[] } }>(token, `
+    query { account { organizations { id name } } }
   `);
-  console.log('\nAccount fields:', accountType.__type.fields.map(f => f.name).join(', '));
+  const org = data.account.organizations[0];
+  if (!org) throw new Error('No organizations found on this Buffer account');
+  return org.id;
+}
 
-  // Step 2 — fetch account with all likely org-related fields
-  const accountData = await bufferGql<Record<string, unknown>>(token, `
-    query {
-      account {
-        id
-        name
-        email
-        currentOrganization { id name }
-        organizations { id name }
-      }
+async function listChannels(token: string): Promise<void> {
+  const orgId = await getOrgId(token);
+
+  const data = await bufferGql<{ channels: BufferChannel[] }>(token, `
+    query GetChannels($input: ChannelsInput!) {
+      channels(input: $input) { id service name }
     }
-  `);
-  console.log('\nAccount data:', JSON.stringify(accountData, null, 2));
+  `, { input: { organizationId: orgId } });
+
+  console.log('\nConnected channels:\n');
+  for (const c of data.channels) {
+    console.log(`  service : ${c.service}`);
+    console.log(`  name    : ${c.name}`);
+    console.log(`  id      : ${c.id}   ← BUFFER_${c.service.toUpperCase()}_CHANNEL`);
+    console.log('');
+  }
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
